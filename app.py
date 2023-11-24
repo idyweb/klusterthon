@@ -127,8 +127,8 @@ def predict():
         # Get the JSON data from the request
         data = request.json
         
-        # Convert the data to a DataFrame
-        data = pd.DataFrame([data])  # Create a DataFrame with a single row
+        # Convert the data to a DataFrame with a single row
+        data = pd.DataFrame([data])
         
         # Preprocess the data
         data = preprocess_data(data, scaler, label_encoder)
