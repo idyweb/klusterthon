@@ -31,7 +31,12 @@ class User(db.Model):
 def create_tables():
     with app.app_context():
         db.create_all()
-        
+
+
+@app.route("/", methods=["GET"])
+def home():
+    return "Welcome to our Solution!"
+       
 @app.route("/signup", methods=["POST"])
 def signup():
     if request.method == 'POST':
