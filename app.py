@@ -42,7 +42,7 @@ def signup():
     if request.method == 'POST':
         try:
             data = request.json
-            print("Received data:", data)  # Log received data
+            print("Received data:", data)
 
             firstname = data['firstname']
             lastname = data['lastname']
@@ -95,29 +95,37 @@ def logout():
     session.pop('user_id', None)
     return jsonify({'message': 'Logged out successfully'}), 200
 
-MODEL_FILE = "final_model.pkl"
+MODEL_FILE = "knn_model.pkl"
 SCALER_FILE = "minmax_scaler.pkl"
-ENCODER_FILE = "label_encoder.pkl"
+LABEL_ENCODER_FILE = "label_encoder.pkl"
+COUNTRY_ENCODER_FILE = "country_encoder.pkl"
+SEASON_ENCODER_FILE = "season_encoder.pkl"
 
 COLUMNS_TO_SCALE = ["temperature", "humidity", "ph", "water availability"]
-COLUMN_TO_ENCODE = "Country"
+ENCODE_LABEL = "label"
+ENCODE_COUNTRY = 'Country'
 
-def preprocess_data(data, scaler, label_encoder):
+def preprocess_data(data, label_encoder, scaler, country_encoder):
     data[COLUMNS_TO_SCALE] = scaler.transform(data[COLUMNS_TO_SCALE])
-    data[COLUMN_TO_ENCODE] = label_encoder.transform(data[COLUMN_TO_ENCODE])
+    data[ENCODE_LABEL] = label_encoder.transform(data[ENCODE_LABEL])
+    data[ENCODE_COUNTRY] = country_encoder.transform(data[ENCODE_COUNTRY])
     return data
 
 def load_model():
     model = load(MODEL_FILE)
     scaler = load(SCALER_FILE)
-    label_encoder = load(ENCODER_FILE)
-    return model, scaler, label_encoder
+    label_encoder = load(LABEL_ENCODER_FILE)
+    country_encoder = load(COUNTRY_ENCODER_FILE)
+    season_encoder = load(SEASON_ENCODER_FILE)
+    
+    
+    return model, scaler, label_encoder, country_encoder, season_encoder
 
 def get_predictions_info(predictions):
-    return f"You should plant {predictions[0]} during {predictions[1]} and harvest during {predictions[2]}."
+    return f" and harvest during {predictions[0]}."
 
 
-model, scaler, label_encoder = load_model()
+model, scaler, label_encoder, country_encoder, season_encoder = load_model()
 
 @app.route("/predict", methods=["POST"])
 @jwt_required()
@@ -128,24 +136,26 @@ def predict():
         data = request.json
         
         # Convert the data to a DataFrame with a single row
-        data = pd.DataFrame([data])
+        data_df = pd.DataFrame(data, index=[0])
+        processed_df = preprocess_data(data_df, label_encoder, scaler, country_encoder)
+        # Make predictions using the loaded model
+        predictions = model.predict(processed_df[['temperature', 'humidity', 'ph', 'water availability', 'label', 'Country']])
         
-        # Preprocess the data
-        data = preprocess_data(data, scaler, label_encoder)
-        
-        # Make predictions using the model
-        predictions = model.predict(data[['temperature', 'humidity', 'ph', 'water availability', 'Country']])
-        
-        # Get predictions information
-        predictions_info = get_predictions_info(predictions[0])
+        pred = season_encoder.inverse_transform(pd.Series(predictions))[0]
+
+        predictions_info = f"Expect to harvest during {pred} season."
         
         # Return the predictions as JSON
-        response = jsonify({'predictions': predictions_info})
+        response = jsonify({'predictions': predictions_info,
+                            "current_user": current_user_id})
         return response, 200
 
     except Exception as e:
         # Return the error as JSON
         return jsonify({'error': str(e)}), 500
+
+
+
      
 if __name__ == "__main__":
     create_tables()
